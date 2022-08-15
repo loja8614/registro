@@ -1,9 +1,12 @@
 package com.officehours.registry.controller;
 
+import com.officehours.registry.exception.ModelNotFoundException;
 import com.officehours.registry.model.People;
 import com.officehours.registry.model.Car;
 import com.officehours.registry.services.PeopleService;
 import com.officehours.registry.services.RegistryService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,33 +25,37 @@ public class PeopleController {
     }
 
     @PostMapping
-    public People create(@RequestBody People people) {
-        return peopleService.save(people);
+    public ResponseEntity<People> create(@RequestBody People people) {
+        return new ResponseEntity(peopleService.save(people), HttpStatus.OK);
     }
 
     @GetMapping
-    public List<People> getAll() {
-        return peopleService.getAll();
+    public ResponseEntity<List<People>> getAll() {
+        return new ResponseEntity(peopleService.getAll(), HttpStatus.OK);
     }
 
     @DeleteMapping("/{id}")
-    public String delete(@PathVariable("id") UUID id) {
-        if (registryService.getCarsByPeople(id).size() == 0) {
-            peopleService.delete(id);
-            return "Person deleted";
-        } else {
-            return "The person is assigned, it cannot be deleted";
+    public ResponseEntity<Object> delete(@PathVariable("id") UUID id) {
+        Optional<People> people = peopleService.getById(id);
+        if (registryService.getCarsByPeople(id).size() != 0) {
+            throw new ModelNotFoundException("The person is assigned, it cannot be deleted");
         }
-
+        if (!people.isPresent() || people.get().getId() == null)
+            throw new ModelNotFoundException("Person not found");
+        peopleService.delete(id);
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @GetMapping("/{id}")
-    public Optional<People> getById(@PathVariable("id") UUID id) {
-        return peopleService.getById(id);
+    public ResponseEntity<Optional<People>> getById(@PathVariable("id") UUID id) {
+        Optional<People> people = peopleService.getById(id);
+        if (!people.isPresent() || people.get().getId() == null)
+            throw new ModelNotFoundException("Person not found");
+        return new ResponseEntity(people, HttpStatus.OK);
     }
 
     @GetMapping("/{people_id}/cars")
-    public List<Car> getCarsById(@PathVariable("people_id") UUID id) {
-        return registryService.getCarsByPeople(id);
+    public ResponseEntity<List<Car>> getCarsById(@PathVariable("people_id") UUID id) {
+        return  new ResponseEntity(registryService.getCarsByPeople(id),HttpStatus.OK);
     }
 }

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,9 +33,10 @@ class RegistryControllerTest {
         Registry registryMock = new Registry(1,people,car);
         Mockito.when(registryService.save(registryMock)).thenReturn(registryMock);
         //when:
-        Registry registrySaved = registryController.create(registryMock);
+        ResponseEntity<Registry> registrySaved = registryController.create(registryMock);
         //then:
-        assertEquals(1,registrySaved.getId());
+        assertEquals(1,registrySaved.getBody().getId());
+        assertEquals(201,registrySaved.getStatusCodeValue());
     }
 
 }

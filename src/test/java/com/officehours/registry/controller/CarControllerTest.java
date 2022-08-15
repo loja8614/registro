@@ -1,15 +1,18 @@
 package com.officehours.registry.controller;
 
+import com.officehours.registry.exception.ModelNotFoundException;
 import com.officehours.registry.model.Car;
 import com.officehours.registry.model.People;
 import com.officehours.registry.services.CarService;
 import com.officehours.registry.services.RegistryService;
 import com.officehours.registry.util.CarDataTest;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.util.ArrayList;
@@ -41,13 +44,14 @@ class CarControllerTest {
         Mockito.when(carService.save(car)).thenReturn(carMocked);
 
         // when:
-        Car carSaved = carController.create(car);
+        ResponseEntity<Car> carSaved = carController.create(car);
         //then:
-        assertEquals(car.getVin(), carSaved.getVin());
-        assertEquals(car.getBrand(), carSaved.getBrand());
-        assertEquals(car.getModel(), carSaved.getModel());
-        assertEquals(car.getColor(), carSaved.getColor());
-        assertEquals(car.getYear(), carSaved.getYear());
+        assertEquals(car.getVin(), carSaved.getBody().getVin());
+        assertEquals(car.getBrand(), carSaved.getBody().getBrand());
+        assertEquals(car.getModel(), carSaved.getBody().getModel());
+        assertEquals(car.getColor(), carSaved.getBody().getColor());
+        assertEquals(car.getYear(), carSaved.getBody().getYear());
+        assertEquals(200, carSaved.getStatusCode().value());
 
     }
 
@@ -58,9 +62,10 @@ class CarControllerTest {
         Mockito.when(carService.getAll()).thenReturn(carsMocked);
 
         // when:
-        List<Car> allCars = carController.getAll();
+        ResponseEntity<List<Car>> allCars = carController.getAll();
         //then:
-        assertEquals(3, allCars.size());
+        assertEquals(3, allCars.getBody().size());
+        assertEquals(200, allCars.getStatusCode().value());
 
     }
 
@@ -70,61 +75,88 @@ class CarControllerTest {
         // given:
         Car carMocked = CarDataTest.getMockCar();
         Mockito.when(carService.getById("VINID")).thenReturn(Optional.of(carMocked));
-
         // when:
-        Optional<Car> car = carController.getById("VINID");
+        ResponseEntity<Optional<Car>> car = carController.getById("VINID");
         //then:
-        assertEquals("Ford", car.get().getBrand());
+        assertEquals("Ford", car.getBody().get().getBrand());
+        assertEquals(200, car.getStatusCode().value());
     }
 
     @Test
-    void givenCar_whenDelete_thenReturnSize0() {
+    void givenCar_whenDelete_thenReturnCodeResponse200() {
 
         // given:
-
         List<People> lstPeopleMocked = new ArrayList<>();
         Mockito.when(registryService.getPeopleByCar("VINID01")).thenReturn(lstPeopleMocked);
+        Mockito.when(carService.getById("VINID01")).thenReturn(Optional.of(CarDataTest.getMockCar()));
 
         // when:
-        String status = carController.delete("VINID01");
+        ResponseEntity<Object> carDeleted = carController.delete("VINID01");
 
         //then:
-        assertEquals(status, "Car deleted");
+        assertEquals(200, carDeleted.getStatusCodeValue());
     }
 
-    @Test
-    void givenCar_whenDeleteWithRegistry_thenNotDelete() {
+    @Test()
+    void givenCar_whenDeleteWithRegistry_thenExceptionNotDelete() {
 
         // given:
         People peopleMocked = new People(UUID.randomUUID(), "Person1", "LastName1", "person1@gmail.com", "F");
         List<People> lstPeopleMocked = new ArrayList<>();
         lstPeopleMocked.add(peopleMocked);
         Mockito.when(registryService.getPeopleByCar("VINID01")).thenReturn(lstPeopleMocked);
-
+        Mockito.when(carService.getById("VINID01")).thenReturn(Optional.of(CarDataTest.getMockCar()));
         // when:
-        String status = carController.delete("VINID01");
+        ModelNotFoundException exceptionMessage = Assertions.assertThrows(ModelNotFoundException.class, () -> carController.delete("VINID01"));
+        //then
+        assertEquals("The car is assigned, it cannot be deleted", exceptionMessage.getMessage());
 
-        //then:
-        assertEquals(status, "The car is assigned, it cannot be deleted");
+    }
+
+    @Test()
+    void givenCar_whenDeleteNotExisting_thenExceptionCarNotFound() {
+
+        // given:
+        List<People> lstPeopleMocked = new ArrayList<>();
+        Optional<Car> carMocked = Optional.of(new Car());
+        Mockito.when(registryService.getPeopleByCar("VINID01")).thenReturn(lstPeopleMocked);
+        Mockito.when(carService.getById("VINID01")).thenReturn(carMocked);
+        // when:
+        ModelNotFoundException exceptionMessage = Assertions.assertThrows(ModelNotFoundException.class, () -> carController.delete("VINID01"));
+        //then
+        assertEquals("Car not found", exceptionMessage.getMessage());
+
+    }
+
+    @Test()
+    void givenCar_whengetByIdNotExisting_thenExceptionCarNotFound() {
+
+        // given:
+        Optional<Car> carMocked = Optional.of(new Car());
+        Mockito.when(carService.getById("VINID01")).thenReturn(carMocked);
+        // when:
+        ModelNotFoundException exceptionMessage = Assertions.assertThrows(ModelNotFoundException.class, () -> carController.getById("VINID01"));
+        //then
+        assertEquals("Car not found", exceptionMessage.getMessage());
+
     }
 
     @Test
     void givenCarVin_whenGetPeople_thenReturnPerson1() {
 
         // given:
-
         People peopleMocked = new People(UUID.randomUUID(), "Person1", "LastName1", "person1@gmail.com", "F");
         List<People> lstPeopleMocked = new ArrayList<>();
         lstPeopleMocked.add(peopleMocked);
 
         // when:
         Mockito.when(registryService.getPeopleByCar("VINID01")).thenReturn(lstPeopleMocked);
-        List<People> lstPeople = carController.getCarsByPeopleId("VINID01");
+        ResponseEntity<List<People>> lstPeople = carController.getCarsByPeopleId("VINID01");
 
         //then:
-        assertEquals(1, lstPeople.size());
-        assertEquals("Person1", lstPeople.get(0).getFirstname());
-        assertEquals("LastName1", lstPeople.get(0).getLastname());
+        assertEquals(1, lstPeople.getBody().size());
+        assertEquals("Person1", lstPeople.getBody().get(0).getFirstname());
+        assertEquals("LastName1", lstPeople.getBody().get(0).getLastname());
     }
 
 

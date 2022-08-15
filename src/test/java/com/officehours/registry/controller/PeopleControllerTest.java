@@ -1,15 +1,18 @@
 package com.officehours.registry.controller;
 
+import com.officehours.registry.exception.ModelNotFoundException;
 import com.officehours.registry.model.Car;
 import com.officehours.registry.model.People;
 import com.officehours.registry.services.PeopleService;
 import com.officehours.registry.services.RegistryService;
 import com.officehours.registry.util.PeopleDataTest;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.util.ArrayList;
@@ -37,13 +40,14 @@ class PeopleControllerTest {
         Mockito.when(peopleService.save(people)).thenReturn(peopleMocked);
 
         // when:
-        People peopleSaved = peopleController.create(people);
+        ResponseEntity<People> peopleSaved = peopleController.create(people);
         //then:
-        assertEquals("Pedro", peopleSaved.getFirstname());
-        assertEquals("Lopez", peopleSaved.getLastname());
-        assertEquals("pedro@email.com", peopleSaved.getEmail());
-        assertEquals("Male", peopleSaved.getGender());
-        assertEquals(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"), peopleSaved.getId());
+        assertEquals("Pedro", peopleSaved.getBody().getFirstname());
+        assertEquals("Lopez", peopleSaved.getBody().getLastname());
+        assertEquals("pedro@email.com", peopleSaved.getBody().getEmail());
+        assertEquals("Male", peopleSaved.getBody().getGender());
+        assertEquals(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"), peopleSaved.getBody().getId());
+        assertEquals(200,peopleSaved.getStatusCodeValue());
 
     }
 
@@ -54,10 +58,10 @@ class PeopleControllerTest {
         Mockito.when(peopleService.getAll()).thenReturn(lstPeopleMocked);
 
         // when:
-        List<People> allPeople = peopleController.getAll();
+        ResponseEntity<List<People>> allPeople = peopleController.getAll();
         //then:
-        assertEquals(3, allPeople.size());
-
+        assertEquals(3, allPeople.getBody().size());
+        assertEquals(200,allPeople.getStatusCodeValue());
     }
 
     @Test
@@ -69,13 +73,26 @@ class PeopleControllerTest {
         Mockito.when(peopleService.getById(id)).thenReturn(Optional.of(peopleMocked));
 
         // when:
-        Optional<People> people = peopleController.getById(id);
+        ResponseEntity<Optional<People>> people = peopleController.getById(id);
         //then:
-        assertEquals("Pedro", people.get().getFirstname());
-        assertEquals("Lopez", people.get().getLastname());
-        assertEquals("pedro@email.com", people.get().getEmail());
-        assertEquals("Male", people.get().getGender());
-        assertEquals(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"), people.get().getId());
+        assertEquals("Pedro", people.getBody().get().getFirstname());
+        assertEquals("Lopez", people.getBody().get().getLastname());
+        assertEquals("pedro@email.com", people.getBody().get().getEmail());
+        assertEquals("Male", people.getBody().get().getGender());
+        assertEquals(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"), people.getBody().get().getId());
+        assertEquals(200,people.getStatusCodeValue());
+    }
+    @Test
+    void givenId_whenGetPeopleByIdNotExisting_thenGetExceptionMessage() {
+
+        // given:
+        Mockito.when(peopleService.getById(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"))).thenReturn(Optional.of(new People()));
+
+        // when:
+        ModelNotFoundException exceptionMessage = Assertions.assertThrows(ModelNotFoundException.class, () -> peopleController.getById(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce")));
+        //then
+        assertEquals("Person not found", exceptionMessage.getMessage());
+
     }
 
     @Test
@@ -84,28 +101,47 @@ class PeopleControllerTest {
         // given:
         List<Car> lstCarMocked = new ArrayList<>();
         Mockito.when(registryService.getCarsByPeople(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"))).thenReturn(lstCarMocked);
+        People peopleMocked =PeopleDataTest.getPeopleMocked();
+        Mockito.when(peopleService.getById(peopleMocked.getId())).thenReturn(Optional.of(peopleMocked));
 
         // when:
-        String status = peopleController.delete(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"));
+        ResponseEntity<Object> peopleDeleted= peopleController.delete(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"));
 
         //then:
-        assertEquals(status, "Person deleted");
+        assertEquals(200, peopleDeleted.getStatusCodeValue());
     }
 
     @Test
-    void givenPeople_whenDeleteWithRegistry_thenNotDelete() {
+    void givenPeople_whenDeleteWithRegistry_thenNotDeleteSendException() {
 
         // given:
         Car carMocked = new Car("VINID01", "Mercedes", "SUV", 2020, "white");
         List<Car> lstCarMocked = new ArrayList<>();
         lstCarMocked.add(carMocked);
         Mockito.when(registryService.getCarsByPeople(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"))).thenReturn(lstCarMocked);
+        Mockito.when(peopleService.getById(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"))).thenReturn(Optional.of(new People()));
 
         // when:
-        String status = peopleController.delete(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"));
+        ModelNotFoundException exceptionMessage = Assertions.assertThrows(ModelNotFoundException.class, () -> peopleController.delete(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce")));
 
         //then:
-        assertEquals(status, "The person is assigned, it cannot be deleted");
+        assertEquals("The person is assigned, it cannot be deleted", exceptionMessage.getMessage());
+    }
+
+    @Test
+    void givenNotPeople_whenDeleteNotExisting_thenNotDeleteSendException() {
+
+        // given:
+        Car carMocked = new Car("VINID01", "Mercedes", "SUV", 2020, "white");
+        List<Car> lstCarMocked = new ArrayList<>();
+        Mockito.when(registryService.getCarsByPeople(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"))).thenReturn(lstCarMocked);
+        Mockito.when(peopleService.getById(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"))).thenReturn(Optional.of(new People()));
+
+        // when:
+        ModelNotFoundException exceptionMessage = Assertions.assertThrows(ModelNotFoundException.class, () -> peopleController.delete(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce")));
+
+        //then:
+        assertEquals("Person not found", exceptionMessage.getMessage());
     }
 
 
@@ -119,15 +155,15 @@ class PeopleControllerTest {
 
         // when:
         Mockito.when(registryService.getCarsByPeople(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"))).thenReturn(lstCarMocked);
-        List<Car> lstCar = peopleController.getCarsById(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"));
+        ResponseEntity<List<Car>> lstCar = peopleController.getCarsById(UUID.fromString("32611be5-33f6-4e5c-996d-9ad88bcb2bce"));
 
         //then:
-        assertEquals(1, lstCar.size());
-        assertEquals("VINID01", lstCar.get(0).getVin());
-        assertEquals("Mercedes", lstCar.get(0).getBrand());
-        assertEquals("SUV", lstCar.get(0).getModel());
-        assertEquals(2020, lstCar.get(0).getYear());
-        assertEquals("white", lstCar.get(0).getColor());
+        assertEquals(1, lstCar.getBody().size());
+        assertEquals("VINID01", lstCar.getBody().get(0).getVin());
+        assertEquals("Mercedes", lstCar.getBody().get(0).getBrand());
+        assertEquals("SUV", lstCar.getBody().get(0).getModel());
+        assertEquals(2020, lstCar.getBody().get(0).getYear());
+        assertEquals("white", lstCar.getBody().get(0).getColor());
     }
 
 }

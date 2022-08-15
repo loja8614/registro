@@ -8,7 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.UUID;
- 
+
 @Repository
 public interface RegistryRepository extends CrudRepository<Registry,Integer> {
     Registry save(Registry registry);
